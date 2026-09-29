@@ -8,32 +8,51 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
+      - name: Locate Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          find /usr/local/lib/android/sdk/cmdline-tools -maxdepth 3 -name sdkmanager -type f -print
 
       - name: Install Android SDK packages
+        shell: bash
         run: |
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          SDKMANAGER=$(find /usr/local/lib/android/sdk/cmdline-tools -maxdepth 3 -name sdkmanager -type f | head -1)
+          echo "Using sdkmanager: $SDKMANAGER"
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+          "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" --licenses < /dev/null || true
+
+          "$SDKMANAGER" --sdk_root="$ANDROID_SDK_ROOT" \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
+
+      - name: Check Android SDK
+        shell: bash
+        run: |
+          ls -la "$ANDROID_SDK_ROOT/platforms"
+          ls -la "$ANDROID_SDK_ROOT/build-tools"
 
       - name: Build APK
-        run: gradle :app:assembleDebug --no-daemon
+        shell: bash
+        run: |
+          gradle :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Check APK
+      - name: Verify APK
+        shell: bash
         run: |
           ls -lh app/build/outputs/apk/debug/
           file app/build/outputs/apk/debug/app-debug.apk
